@@ -1,0 +1,41 @@
+<!-- python -m http.server 8000 -->
+<!-- http://localhost:8000 -->
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale-1.0" />
+    <title>Multi-Video Analiz Aracı v3</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="loading-overlay" class="hidden">
+      <div class="loader"></div>
+      <p id="loading-text">Videolar işleniyor...</p>
+    </div>
+
+    <div id="main-content">
+      <header class="banner">
+        <h2>Multi-Video Analiz Aracı</h2>
+
+        <div class="global-controls">
+          <button id="select-folder-btn">Video Klasörü Seç</button>
+
+          <label for="layout-select">Ekran Düzeni:</label>
+          <select id="layout-select">
+            <option value="1">1 Video</option>
+            <option value="2">2 Video</option>
+            <option value="4" selected>4 Video</option>
+          </select>
+
+          <button id="play-all-btn" title="Tümünü Oynat">▶️ TÜMÜ</button>
+          <button id="pause-all-btn" title="Tümünü Durdur">⏸️ TÜMÜ</button>
+        </div>
+      </header>
+
+      <main id="video-grid-container"></main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
