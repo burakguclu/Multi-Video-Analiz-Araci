@@ -4,7 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
   let activePlayers = new Map(); // Key: player ID (int), Value: { handle: FileHandle, dirHandle: DirectoryHandle, isRoot: boolean }
   let videoInfoCache = new Map();
   let pendingVideoInfoRequests = new Map();
-  let autoPausedByFullscreen = []; // YENİ: Tam ekran için
+  let autoPausedByFullscreen = [];
 
   const VIDEO_EXTENSIONS = [
     ".mp4",
@@ -28,7 +28,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const FRAME_DURATION = 1 / 30;
 
-  // HATA DÜZELTMESİ (1. İstek): 'normalize' kaldırıldı, sadece 'replace' kullanılıyor.
   const CONTROL_CHAR_REGEX = /[\u0000-\u001F\u007F-\u009F\u2000-\u206F\uFEFF]/g;
 
   function cleanName(name) {
@@ -142,7 +141,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function handleSelectFolderClick() {
     try {
-      rootDirectoryHandle = await window.showDirectoryPicker();
+      // --- YENİ DEĞİŞİKLİK BURADA ---
+      // Varsayılan olarak 'Videolar' klasörünü açmayı dene
+      rootDirectoryHandle = await window.showDirectoryPicker({
+        startIn: "videos",
+      });
+      // --- DEĞİŞİKLİK SONU ---
+
       videoInfoCache.clear();
       pendingVideoInfoRequests.clear();
       activePlayers.clear();
@@ -180,23 +185,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /**
-   * HATA DÜZELTMESİ (1. İstek): startsWith('.') filtresi kaldırıldı.
-   */
   async function scanDirectoryRecursive(dirHandle) {
     let videoFiles = [];
     try {
       for await (const entry of dirHandle.values()) {
         const cleanEntryName = cleanName(entry.name);
 
-        // HATA DÜZELTMESİ (1. İstek): O satır tamamen kaldırıldı.
-
         if (entry.kind === "directory") {
-          if (cleanEntryName.startsWith(".")) continue; // Gizli klasörleri atla
+          if (cleanEntryName.startsWith(".")) continue;
           const subFiles = await scanDirectoryRecursive(entry);
           videoFiles = videoFiles.concat(subFiles);
         } else if (entry.kind === "file") {
-          if (cleanEntryName.startsWith(".")) continue; // Gizli dosyaları atla
+          if (cleanEntryName.startsWith(".")) continue;
 
           const parts = cleanEntryName.split(".");
           if (parts.length < 2) continue;
@@ -235,8 +235,6 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       for await (const entry of currentHandle.values()) {
         const cleanEntryName = cleanName(entry.name);
-
-        // HATA DÜZELTMESİ (1. İstek): O satır tamamen kaldırıldı.
 
         if (entry.kind === "directory") {
           if (cleanEntryName.startsWith(".")) continue;
@@ -382,7 +380,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // --- 4. Video Load (HATA DÜZELTMESİ 2 - blob) ---
+  // --- 4. Video Load ---
 
   async function loadVideoFromFile(fileHandle, playerWrapper) {
     let file;
@@ -402,13 +400,11 @@ document.addEventListener("DOMContentLoaded", () => {
     video.play();
     playerWrapper.classList.add("video-loaded");
 
-    // YENİ: Başlık çubuğunu ayarla
     const titleBar = playerWrapper.querySelector(".video-title-bar");
     const cleanFileName = cleanName(fileHandle.name);
     titleBar.textContent = cleanFileName;
-    titleBar.title = cleanFileName; // Tam adı görmek için
+    titleBar.title = cleanFileName;
 
-    // HATA DÜZELTMESİ (2. İstek): Aktif oynatıcıya 'FileHandle'ı VE 'DirectoryHandle'ı kaydet
     const playerId = parseInt(playerWrapper.dataset.playerId);
     activePlayers.set(playerId, {
       handle: fileHandle,
@@ -447,7 +443,6 @@ document.addEventListener("DOMContentLoaded", () => {
       allWrappers.push(playerWrapper);
     }
 
-    // Await (bekleme) işlemlerini döngü dışına alarak performansı artır
     const renderTasks = [];
     for (let i = 0; i < newCount; i++) {
       const playerWrapper = allWrappers[i];
@@ -456,7 +451,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const info = dataToRestore[i];
         playerWrapper.currentDirHandle = info.dirHandle;
         playerWrapper.isRoot = info.isRoot;
-        // Yüklemeyi bir 'task' (görev) olarak ekle
         renderTasks.push(loadVideoFromFile(info.handle, playerWrapper));
       } else {
         playerWrapper.currentDirHandle = rootDirectoryHandle;
@@ -469,7 +463,7 @@ document.addEventListener("DOMContentLoaded", () => {
         );
       }
     }
-    await Promise.all(renderTasks); // Tüm yuvaların dolmasını bekle
+    await Promise.all(renderTasks);
   }
 
   function createPlayerInstance(id) {
@@ -480,10 +474,10 @@ document.addEventListener("DOMContentLoaded", () => {
     playerWrapper.currentDirHandle = null;
     playerWrapper.isRoot = true;
 
-    // YENİ: Başlık çubuğu eklendi
     playerWrapper.innerHTML = `
       <div class="empty-state"></div>
-      <div class="video-title-bar"></div> <video preload="auto"></video>
+      <div class="video-title-bar"></div> 
+      <video preload="auto"></video>
       <div class="video-controls">
           <div class="timeline-container">
               <span class="time-display">00:00 / 00:00</span>
@@ -520,11 +514,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const muteBtn = playerWrapper.querySelector(".mute-btn");
     const volumeSlider = playerWrapper.querySelector(".volume-slider");
     const fullscreenBtn = playerWrapper.querySelector(".fullscreen-btn");
-    const titleBar = playerWrapper.querySelector(".video-title-bar"); // YENİ
+    const titleBar = playerWrapper.querySelector(".video-title-bar");
 
     // --- Olay Dinleyicileri ---
 
-    // Kapatma
     closeBtn.addEventListener("click", () => {
       video.pause();
       if (video.src) URL.revokeObjectURL(video.src);
@@ -532,7 +525,7 @@ document.addEventListener("DOMContentLoaded", () => {
       playerWrapper.classList.remove("video-loaded");
       activePlayers.delete(id);
 
-      titleBar.textContent = ""; // YENİ: Başlığı temizle
+      titleBar.textContent = "";
 
       renderFileListInSlot(emptyStateDiv, playerWrapper);
 
@@ -541,23 +534,15 @@ document.addEventListener("DOMContentLoaded", () => {
       timelineSlider.value = 0;
     });
 
-    // Kontroller
     playPauseBtn.addEventListener("click", () => togglePlayPause(video));
-
-    // YENİ: Çift tıklama ile tam ekran
     video.addEventListener("dblclick", () => toggleFullscreen(playerWrapper));
-
-    // YENİ: Buton ile tam ekran
     fullscreenBtn.addEventListener("click", () =>
       toggleFullscreen(playerWrapper)
     );
 
-    // YENİ: Tek tıklama (videoya)
     video.addEventListener("click", (e) => {
-      // Çift tıklamayı tetiklememek için kısa bir gecikme
       setTimeout(() => {
         if (e.detail === 1) {
-          // Sadece tek tıklama ise
           togglePlayPause(video);
         }
       }, 200);
@@ -587,7 +572,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // HATA DÜZELTMESİ (Yazım hatası): 'targe.value' -> 'target.value'
     timelineSlider.addEventListener("input", (e) => {
       if (isFinite(video.duration)) {
         video.currentTime = parseFloat(e.target.value);
@@ -650,8 +634,6 @@ document.addEventListener("DOMContentLoaded", () => {
       .forEach((v) => v.pause());
   }
 
-  // --- YENİ: Tam Ekran Fonksiyonları ---
-
   function toggleFullscreen(playerWrapper) {
     if (!document.fullscreenElement) {
       enterFullscreen(playerWrapper);
@@ -662,7 +644,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function enterFullscreen(playerWrapper) {
     const targetVideo = playerWrapper.querySelector("video");
-    if (!targetVideo || !targetVideo.src) return; // Video yüklü değilse yapma
+    if (!targetVideo || !targetVideo.src) return;
 
     document
       .querySelectorAll("#video-grid-container video")
