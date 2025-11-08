@@ -215,6 +215,23 @@ body {
 
 
 /* Video ve Kontroller (Video Yüklendiğinde) */
+
+/* YENİ: Video Başlık Çubuğu */
+.video-title-bar {
+    display: none; /* Varsayılan olarak gizli */
+    padding: 6px 10px;
+    background-color: var(--bg-dark); /* Koyu arkaplan */
+    color: #ccc;
+    font-size: 0.9rem;
+    font-weight: bold;
+    flex-shrink: 0; /* Küçülmesin */
+    
+    /* Uzun başlıklar için */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .player-wrapper video {
     width: 100%;
     flex: 1; 
@@ -231,11 +248,22 @@ body {
     align-items: center;
     flex-shrink: 0; 
 }
+
+/* GÜNCELLENDİ: Başlık çubuğu eklendi */
 .player-wrapper video,
-.player-wrapper .video-controls { display: none; }
+.player-wrapper .video-controls,
+.player-wrapper .video-title-bar { 
+    display: none; 
+}
 .player-wrapper.video-loaded .empty-state { display: none; }
-.player-wrapper.video-loaded video,
 .player-wrapper.video-loaded .video-controls { display: flex; }
+.player-wrapper.video-loaded .video-title-bar { 
+    display: block; /* Başlık çubuğu bir blok elementtir */
+}
+.player-wrapper.video-loaded video {
+    display: block; /* Video da bir blok elementtir */
+}
+
 
 /* Kontrol Butonları, Zaman Çizgisi, Ses */
 .video-controls button {
@@ -251,7 +279,7 @@ body {
 .video-controls button:hover { background-color: #666; }
 .video-controls .close-btn {
     background-color: #c0392b;
-    margin-left: auto; /* Bu, Kapat butonunu en sağa iter */
+    margin-left: auto; 
 }
 .video-controls .close-btn:hover { background-color: #a93226; }
 .timeline-container {
@@ -274,9 +302,6 @@ body {
 .speed-control input[type="range"] { width: 80px; }
 .speed-control span { width: 35px; }
 
-/* YENİ: Tam Ekran Butonu Stili */
 .fullscreen-btn {
     font-weight: bold;
-    /* margin-left: auto; -> Bu satırı Kapat butonundan buraya alırsak */
-    /* Kapat butonu hemen sağında kalır */
 }

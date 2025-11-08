@@ -4,11 +4,8 @@ document.addEventListener("DOMContentLoaded", () => {
   let activePlayers = new Map(); // Key: player ID (int), Value: { handle: FileHandle, dirHandle: DirectoryHandle, isRoot: boolean }
   let videoInfoCache = new Map();
   let pendingVideoInfoRequests = new Map();
+  let autoPausedByFullscreen = []; // YENİ: Tam ekran için
 
-  // YENİ: Tam ekran durumunu yönetmek için
-  let autoPausedByFullscreen = [];
-
-  // Tüm video uzantıları
   const VIDEO_EXTENSIONS = [
     ".mp4",
     ".webm",
@@ -219,7 +216,7 @@ document.addEventListener("DOMContentLoaded", () => {
     return videoFiles;
   }
 
-  // --- 3. UI Render (Her Pencere İçin Ayrı Gezinme - 3. İstek) ---
+  // --- 3. UI Render ---
 
   async function renderFileListInSlot(emptyStateDiv, playerWrapper) {
     emptyStateDiv.innerHTML = "";
@@ -238,6 +235,8 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       for await (const entry of currentHandle.values()) {
         const cleanEntryName = cleanName(entry.name);
+
+        // HATA DÜZELTMESİ (1. İstek): O satır tamamen kaldırıldı.
 
         if (entry.kind === "directory") {
           if (cleanEntryName.startsWith(".")) continue;
@@ -275,7 +274,6 @@ document.addEventListener("DOMContentLoaded", () => {
     emptyStateDiv.appendChild(searchBar);
     emptyStateDiv.appendChild(list);
 
-    // 1. Geri Butonu
     if (!isRoot) {
       const li = document.createElement("li");
       li.className = "back-button";
@@ -308,7 +306,6 @@ document.addEventListener("DOMContentLoaded", () => {
       list.appendChild(li);
     }
 
-    // 2. Alt Klasörler
     const sortedFolderNames = Array.from(localSubfolderMap.keys()).sort(
       (a, b) =>
         a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
@@ -326,7 +323,6 @@ document.addEventListener("DOMContentLoaded", () => {
       list.appendChild(li);
     }
 
-    // 3. Videolar
     const sortedVideoNames = Array.from(localFileMap.keys()).sort((a, b) =>
       a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" })
     );
@@ -406,6 +402,13 @@ document.addEventListener("DOMContentLoaded", () => {
     video.play();
     playerWrapper.classList.add("video-loaded");
 
+    // YENİ: Başlık çubuğunu ayarla
+    const titleBar = playerWrapper.querySelector(".video-title-bar");
+    const cleanFileName = cleanName(fileHandle.name);
+    titleBar.textContent = cleanFileName;
+    titleBar.title = cleanFileName; // Tam adı görmek için
+
+    // HATA DÜZELTMESİ (2. İstek): Aktif oynatıcıya 'FileHandle'ı VE 'DirectoryHandle'ı kaydet
     const playerId = parseInt(playerWrapper.dataset.playerId);
     activePlayers.set(playerId, {
       handle: fileHandle,
@@ -444,6 +447,8 @@ document.addEventListener("DOMContentLoaded", () => {
       allWrappers.push(playerWrapper);
     }
 
+    // Await (bekleme) işlemlerini döngü dışına alarak performansı artır
+    const renderTasks = [];
     for (let i = 0; i < newCount; i++) {
       const playerWrapper = allWrappers[i];
 
@@ -451,16 +456,20 @@ document.addEventListener("DOMContentLoaded", () => {
         const info = dataToRestore[i];
         playerWrapper.currentDirHandle = info.dirHandle;
         playerWrapper.isRoot = info.isRoot;
-        await loadVideoFromFile(info.handle, playerWrapper);
+        // Yüklemeyi bir 'task' (görev) olarak ekle
+        renderTasks.push(loadVideoFromFile(info.handle, playerWrapper));
       } else {
         playerWrapper.currentDirHandle = rootDirectoryHandle;
         playerWrapper.isRoot = rootDirectoryHandle !== null;
-        await renderFileListInSlot(
-          playerWrapper.querySelector(".empty-state"),
-          playerWrapper
+        renderTasks.push(
+          renderFileListInSlot(
+            playerWrapper.querySelector(".empty-state"),
+            playerWrapper
+          )
         );
       }
     }
+    await Promise.all(renderTasks); // Tüm yuvaların dolmasını bekle
   }
 
   function createPlayerInstance(id) {
@@ -471,10 +480,10 @@ document.addEventListener("DOMContentLoaded", () => {
     playerWrapper.currentDirHandle = null;
     playerWrapper.isRoot = true;
 
-    // YENİ: Tam Ekran butonu eklendi (⛶)
+    // YENİ: Başlık çubuğu eklendi
     playerWrapper.innerHTML = `
       <div class="empty-state"></div>
-      <video preload="auto"></video>
+      <div class="video-title-bar"></div> <video preload="auto"></video>
       <div class="video-controls">
           <div class="timeline-container">
               <span class="time-display">00:00 / 00:00</span>
@@ -510,7 +519,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const speedDisplay = playerWrapper.querySelector(".speed-display");
     const muteBtn = playerWrapper.querySelector(".mute-btn");
     const volumeSlider = playerWrapper.querySelector(".volume-slider");
-    const fullscreenBtn = playerWrapper.querySelector(".fullscreen-btn"); // YENİ
+    const fullscreenBtn = playerWrapper.querySelector(".fullscreen-btn");
+    const titleBar = playerWrapper.querySelector(".video-title-bar"); // YENİ
 
     // --- Olay Dinleyicileri ---
 
@@ -521,6 +531,8 @@ document.addEventListener("DOMContentLoaded", () => {
       video.removeAttribute("src");
       playerWrapper.classList.remove("video-loaded");
       activePlayers.delete(id);
+
+      titleBar.textContent = ""; // YENİ: Başlığı temizle
 
       renderFileListInSlot(emptyStateDiv, playerWrapper);
 
@@ -540,7 +552,17 @@ document.addEventListener("DOMContentLoaded", () => {
       toggleFullscreen(playerWrapper)
     );
 
-    video.addEventListener("click", () => togglePlayPause(video));
+    // YENİ: Tek tıklama (videoya)
+    video.addEventListener("click", (e) => {
+      // Çift tıklamayı tetiklememek için kısa bir gecikme
+      setTimeout(() => {
+        if (e.detail === 1) {
+          // Sadece tek tıklama ise
+          togglePlayPause(video);
+        }
+      }, 200);
+    });
+
     frameFwdBtn.addEventListener("click", () => stepFrame(video, 1));
     frameBackBtn.addEventListener("click", () => stepFrame(video, -1));
 
@@ -565,7 +587,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // DÜZELTME: 'targe.value' yazım hatası 'target.value' olarak düzeltildi.
+    // HATA DÜZELTMESİ (Yazım hatası): 'targe.value' -> 'target.value'
     timelineSlider.addEventListener("input", (e) => {
       if (isFinite(video.duration)) {
         video.currentTime = parseFloat(e.target.value);
@@ -632,31 +654,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function toggleFullscreen(playerWrapper) {
     if (!document.fullscreenElement) {
-      // Tam ekrana GİR
       enterFullscreen(playerWrapper);
     } else {
-      // Tam ekrandan ÇIK
       exitFullscreen();
     }
   }
 
   function enterFullscreen(playerWrapper) {
-    // Tam ekrana alınacak videoyu bul
     const targetVideo = playerWrapper.querySelector("video");
+    if (!targetVideo || !targetVideo.src) return; // Video yüklü değilse yapma
 
-    // Diğer tüm videoları gez
     document
       .querySelectorAll("#video-grid-container video")
       .forEach((video) => {
         if (video !== targetVideo && !video.paused) {
-          // Eğer hedef video değilse VE oynuyorsa:
           video.pause();
-          // Tam ekrandan çıkınca yeniden oynatmak için listeye ekle
           autoPausedByFullscreen.push(video);
         }
       });
 
-    // Oynatıcı kapsayıcısını tam ekran yap (kontrollerle birlikte)
     playerWrapper.requestFullscreen();
   }
 
@@ -668,12 +684,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function handleFullscreenChange() {
     if (!document.fullscreenElement) {
-      // Tam ekrandan çıkıldı.
-      // Otomatik olarak duraklatılan videoları yeniden başlat
       autoPausedByFullscreen.forEach((video) => {
         if (video) video.play();
       });
-      // Listeyi temizle
       autoPausedByFullscreen = [];
     }
   }
@@ -683,9 +696,7 @@ document.addEventListener("DOMContentLoaded", () => {
   pauseAllBtn.addEventListener("click", pauseAll);
   layoutSelect.addEventListener("change", updateLayout);
   selectFolderBtn.addEventListener("click", handleSelectFolderClick);
-
-  // YENİ: Tam ekrandan çıkışları (örn: Esc tuşu) dinle
   document.addEventListener("fullscreenchange", handleFullscreenChange);
 
-  updateLayout(); // Sayfa yüklendiğinde varsayılan (boş) düzeni kur
+  updateLayout();
 });
